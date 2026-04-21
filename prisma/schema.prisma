@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  createdAt    DateTime       @default(now())
+  sources      Source[]
+  documents    Document[]
+  transactions Transaction[]
+  obligations  Obligation[]
+  feedback     UserFeedback[]
+  insights     Insight[]
+}
+
+model Source {
+  id               String        @id @default(uuid())
+  userId           String
+  type             String        // "pdf", "email", "csv"
+  originalFilename String
+  status           String        // "pending", "processing", "completed", "error"
+  period           String?       // "YYYY-MM", e.g. "2026-03"
+  uploadedAt       DateTime      @default(now())
+  user             User          @relation(fields: [userId], references: [id])
+  documents        Document[]
+  transactions     Transaction[]
+}
+
+model Document {
+  id                   String        @id @default(uuid())
+  sourceId             String
+  userId               String
+  documentType         String        // "credit_card_statement", "mortgage_statement", etc.
+  issuer               String?
+  statementPeriodStart DateTime?
+  statementPeriodEnd   DateTime?
+  confidenceScore      Float?
+  rawText              String?
+  parsedJson           String?       // JSON string
+  source               Source        @relation(fields: [sourceId], references: [id])
+  user                 User          @relation(fields: [userId], references: [id])
+  transactions         Transaction[]
+  obligations          Obligation[]
+}
+
+model Transaction {
+  id                   String   @id @default(uuid())
+  userId               String
+  documentId           String?
+  sourceId             String?
+  transactionDate      DateTime
+  merchantRaw          String
+  merchantNormalized   String
+  amount               Float
+  signedAmount         Float?
+  currency             String   @default("COP")
+  rowType              String   // "purchase", "payment", "fee", "insurance", "interest"
+  category             String   @default("General")
+  recurringCandidate   Boolean  @default(false)
+  subscriptionCandidate Boolean  @default(false)
+  duplicateGroupId     String?
+  confidenceScore      Float?
+
+  user     User      @relation(fields: [userId], references: [id])
+  document Document? @relation(fields: [documentId], references: [id])
+  source   Source?   @relation(fields: [sourceId], references: [id])
+}
+
+model Obligation {
+  id                 String   @id @default(uuid())
+  userId             String
+  documentId         String?
+  obligationType     String   // "mortgage", "consumer_loan", "auto_insurance"
+  issuer             String
+  productName        String?
+  paymentValue       Float
+  principalComponent Float?
+  interestComponent  Float?
+  insuranceComponent Float?
+  dueDate            DateTime?
+  frequency          String   @default("monthly")
+  confidenceScore    Float?
+
+  user     User      @relation(fields: [userId], references: [id])
+  document Document? @relation(fields: [documentId], references: [id])
+}
+
+model MerchantAlias {
+  id             String @id @default(uuid())
+  rawName        String @unique
+  normalizedName String
+}
+
+model UserFeedback {
+  id             String   @id @default(uuid())
+  userId         String
+  objectType     String   // "transaction", "obligation", "document"
+  objectId       String
+  correctionType String
+  originalValue  String?
+  correctedValue String
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Insight {
+  id              String   @id @default(uuid())
+  userId          String
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  insightType     String   // "optimization", "warning", "info"
+  title           String
+  description     String
+  amount          Float?
+  confidenceScore Float?
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
