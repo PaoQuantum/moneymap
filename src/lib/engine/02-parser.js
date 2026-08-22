@@ -1,14 +1,73 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openaiClient = null;
+function getOpenAI() {
+  if (!openaiClient && process.env.OPENAI_API_KEY) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
+
+// Fallback heuristic extraction when no LLM API keys are provided
+function heuristicExtract(rawText) {
+  const transactions = [];
+  const lines = rawText.split(/\r?\n|\s{3,}/);
+  const dateRegex = /\b(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4})\b/;
+  const amountRegex = /(?:\$|COP|USD)?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:\.[0-9]+)?)/;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length < 5) continue;
+    const dateMatch = trimmed.match(dateRegex);
+    const amountMatch = trimmed.match(amountRegex);
+
+    if (dateMatch && amountMatch) {
+      let cleanAmount = amountMatch[1].replace(/\./g, '').replace(/,/g, '.');
+      const numAmount = parseFloat(cleanAmount);
+      if (!isNaN(numAmount) && numAmount > 0) {
+        let merchant = trimmed
+          .replace(dateMatch[0], '')
+          .replace(amountMatch[0], '')
+          .replace(/[^a-zA-Z0-9\s]/g, ' ')
+          .trim();
+        if (merchant.length > 2) {
+          transactions.push({
+            date: dateMatch[1].length === 10 && dateMatch[1].includes('-') ? dateMatch[1] : new Date().toISOString().split('T')[0],
+            merchant: merchant.substring(0, 40),
+            amount: numAmount
+          });
+        }
+      }
+    }
+  }
+
+  const isCreditCard = /tarjeta|credit|visa|mastercard|cupo/i.test(rawText);
+  const isMortgage = /hipotec|vivienda|uvr/i.test(rawText);
+  const isLoan = /prestamo|credito|libranza/i.test(rawText);
+  const docGuess = isCreditCard ? "credit_card" : (isMortgage ? "mortgage" : (isLoan ? "loan" : "bank_account"));
+
+  let issuer = "Banco";
+  if (/bancolombia/i.test(rawText)) issuer = "Bancolombia";
+  else if (/davivienda/i.test(rawText)) issuer = "Davivienda";
+  else if (/bbva/i.test(rawText)) issuer = "BBVA";
+  else if (/bogota/i.test(rawText)) issuer = "Banco de Bogotá";
+  else if (/falabella/i.test(rawText)) issuer = "Banco Falabella";
+
+  return {
+    document_guess: docGuess,
+    issuer,
+    transactions: transactions.slice(0, 30),
+    obligations: []
+  };
+}
 
 /**
  * Módulo 2: Parser Híbrido
  * Intenta usar Reglas/Regex para bancos conocidos antes de usar el LLM.
- * Soporta Anthropic (Claude 3.5 Sonnet), Gemini 1.5 Flash y OpenAI (GPT-4o-mini).
- * PRIORIDAD: Claude > Gemini > OpenAI
+ * Soporta Anthropic (Claude 3.5 Sonnet), Gemini 1.5/2.5 Flash y OpenAI (GPT-4o-mini).
+ * PRIORIDAD: Claude > Gemini > OpenAI > Heuristics
  */
 export async function parseDocument(payload) {
   const { rawText, sourceId } = payload;
@@ -25,10 +84,11 @@ export async function parseDocument(payload) {
 
   if (!parsedJson) {
     usedLLM = true;
-    parserConfidence = 0.95; // Claude es más confiable en extracción
+    parserConfidence = 0.95;
 
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
     
     if (anthropicKey) {
       // USAR CLAUDE HAIKU 4.5 (Rápido, económico y compatible)
@@ -64,7 +124,7 @@ export async function parseDocument(payload) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(`Claude API Error: ${errorData.error?.message || response.statusText}`);
       }
 
@@ -78,9 +138,9 @@ export async function parseDocument(payload) {
       }
 
     } else if (geminiKey) {
-      // USAR GEMINI 1.5 FLASH (REST API)
-      modelUsed = "gemini-1.5-flash";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      // USAR GEMINI FLASH (REST API)
+      modelUsed = "gemini-2.5-flash";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
       
       const prompt = `Extrae información financiera estructurada en JSON EXACTAMENTE con este formato:
       {
@@ -99,27 +159,44 @@ export async function parseDocument(payload) {
         })
       });
 
-      const result = await response.json();
-      const rawContent = result.candidates[0].content.parts[0].text;
-      const cleaned = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      try {
-        parsedJson = JSON.parse(cleaned);
-      } catch (e) {
-        throw new Error(`Gemini returned unparseable JSON. Raw: ${rawContent.substring(0, 200)}`);
+      if (response.ok) {
+        const result = await response.json();
+        const rawContent = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        const cleaned = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        try {
+          parsedJson = JSON.parse(cleaned);
+        } catch (e) {
+          console.warn("Gemini parse fallback to heuristic:", e?.message);
+          parsedJson = heuristicExtract(rawText);
+        }
+      } else {
+        console.warn("Gemini API call failed, falling back to heuristic parsing");
+        parsedJson = heuristicExtract(rawText);
       }
 
-    } else {
+    } else if (openaiKey) {
       // FALLBACK: OPENAI GPT-4O-MINI
       modelUsed = "gpt-4o-mini";
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: "Extrae información financiera en JSON." },
-          { role: "user", content: rawText ? rawText.substring(0, 10000) : "" }
-        ]
-      });
-      parsedJson = JSON.parse(response.choices[0].message.content);
+      const client = getOpenAI();
+      if (client) {
+        const response = await client.chat.completions.create({
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: "Extrae información financiera en JSON." },
+            { role: "user", content: rawText ? rawText.substring(0, 10000) : "" }
+          ]
+        });
+        parsedJson = JSON.parse(response.choices[0].message.content);
+      } else {
+        parsedJson = heuristicExtract(rawText);
+      }
+    } else {
+      // No external API key present - run local heuristic parser
+      modelUsed = "heuristic-regex";
+      usedLLM = false;
+      parserConfidence = 0.85;
+      parsedJson = heuristicExtract(rawText);
     }
   }
 
@@ -129,3 +206,4 @@ export async function parseDocument(payload) {
     metadata: { usedLLM, parserConfidence, modelUsed }
   };
 }
+

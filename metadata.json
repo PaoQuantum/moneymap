@@ -1,0 +1,6 @@
+{
+  "name": "MoneyMap",
+  "description": "Financial document parser and personal finance dashboard for tracking expenses, subscriptions, and fixed obligations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
