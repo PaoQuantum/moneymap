@@ -7,13 +7,19 @@ import { SPENDING_KINDS } from './classify.js';
  */
 
 // Un mismo movimiento puede aparecer en varios extractos (por ejemplo, compras a cuotas).
+// Se deja la copia del extracto original (la cuota más baja) y se anotan los demás en `alsoIn`.
 export function uniqueTransactions(transactions) {
-  const seen = new Map();
+  const groups = new Map();
   for (const t of transactions) {
     const key = [t.card || t.docAccount || '', t.date, t.amount, t.currency, (t.description || '').toUpperCase()].join('|');
-    if (!seen.has(key)) seen.set(key, t);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
   }
-  return [...seen.values()];
+  return [...groups.values()].map(g => {
+    if (g.length === 1) return g[0];
+    const sorted = [...g].sort((a, b) => (a.installments?.current ?? 0) - (b.installments?.current ?? 0));
+    return { ...sorted[0], alsoIn: sorted.slice(1).map(t => t.id) };
+  });
 }
 
 const sum = arr => arr.reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -135,7 +141,7 @@ export function buildInsights(transactions, docs) {
   // 7. Cobros que se repiten cada mes (posibles suscripciones)
   const groups = {};
   for (const t of txs.filter(t => t.kind === 'expense' && !t.previousPeriod && t.date)) {
-    const key = (t.description || '').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 18);
+    const key = t.merchantKey || (t.description || '').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 18);
     (groups[key] = groups[key] || []).push(t);
   }
   const recurring = Object.values(groups).filter(g => {
@@ -181,12 +187,17 @@ export function monthlySummary(transactions) {
   const months = {};
   for (const t of txs) {
     const m = t.date.slice(0, 7);
-    const o = months[m] = months[m] || { month: m, income: 0, spending: 0, byCategory: {}, count: 0 };
+    const o = months[m] = months[m] || { month: m, income: 0, spending: 0, byCategory: {}, byMerchant: {}, count: 0 };
     o.count++;
     if (t.kind === 'income') o.income += t.amount;
     if (SPENDING_KINDS.has(t.kind) && t.amount < 0) {
       o.spending += -t.amount;
       o.byCategory[t.category] = (o.byCategory[t.category] || 0) - t.amount;
+      if (t.kind === 'expense') {
+        const k = t.merchantKey || t.description;
+        const mm = o.byMerchant[k] = o.byMerchant[k] || { key: k, name: t.merchant || t.description, total: 0, count: 0, category: t.category };
+        mm.total -= t.amount; mm.count++;
+      }
     }
   }
   return Object.values(months).sort((a, b) => a.month.localeCompare(b.month));

@@ -132,3 +132,15 @@
 .modal .tiles { grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .modal .tiles .card { padding: 12px; }
 .modal .tiles .tileValue { font-size: clamp(15px, 4.2vw, 24px); }
+
+/* Comercios en el resumen */
+.merchantRow {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line, #e7ecf2);
+  background: none; text-align: left; color: inherit;
+}
+.merchantRow:first-of-type { border-top: 0; }
+.merchantRow:hover { color: var(--accent); }
+
+/* Recuadro de corrección en el detalle del movimiento */
+.fixBox { margin-top: 16px; padding: 16px; border: 1px solid var(--line, #e7ecf2); border-radius: 14px; }

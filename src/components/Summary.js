@@ -4,7 +4,7 @@ import s from '../app/app.module.css';
 import { fmt } from '../lib/engine/insights.js';
 import { periodLabel } from '../lib/parsers/utils.js';
 
-export default function Summary({ months, findingsTotal, onGoFindings }) {
+export default function Summary({ months, findingsTotal, onGoFindings, onMerchant }) {
   const [sel, setSel] = useState(months.length ? months[months.length - 1].month : null);
   if (!months.length) return <div className={`${s.card} ${s.empty}`}>Aún no hay movimientos con fecha para resumir.</div>;
   const m = months.find(x => x.month === sel) || months[months.length - 1];
@@ -12,6 +12,7 @@ export default function Summary({ months, findingsTotal, onGoFindings }) {
   const cats = Object.entries(m.byCategory).sort((a, b) => b[1] - a[1]);
   const max = cats[0]?.[1] || 1;
   const diff = m.income - m.spending;
+  const merchants = Object.values(m.byMerchant || {}).sort((a, b) => b.total - a.total).slice(0, 8);
 
   return (
     <div>
@@ -60,6 +61,22 @@ export default function Summary({ months, findingsTotal, onGoFindings }) {
           </div>
         ))}
       </div>
+
+      {merchants.length > 0 && (
+        <div className={s.card} style={{ marginTop: 16 }}>
+          <p className={s.cardTitle}>¿Dónde más gastaste?</p>
+          <p className={s.cardNote}>Junta las compras de un mismo comercio aunque vengan de bancos o sedes distintas. Toca uno para ver sus movimientos.</p>
+          {merchants.map(x => (
+            <button key={x.key} className={s.merchantRow} onClick={() => onMerchant?.(x.name)}>
+              <span>
+                <span style={{ fontWeight: 500 }}>{x.name}</span>
+                <span className={s.small}> · {x.count} {x.count === 1 ? 'compra' : 'compras'} · {x.category}</span>
+              </span>
+              <span>{fmt(x.total)}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

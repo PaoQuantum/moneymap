@@ -6,13 +6,14 @@ import Summary from '../components/Summary.js';
 import Findings from '../components/Findings.js';
 import Transactions from '../components/Transactions.js';
 import Documents from '../components/Documents.js';
-import { loadData, saveData, addDocument, removeDocument, updateTransaction, clearAll } from '../lib/store.js';
+import { loadData, saveData, addDocument, removeDocument, updateTransaction, setMerchantRule, removeMerchantRule, clearAll } from '../lib/store.js';
 import { buildInsights, monthlySummary } from '../lib/engine/insights.js';
 
 export default function Home() {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState('summary');
   const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => { const d = loadData(); setData(d); if (!Object.keys(d.docs).length) setAdding(true); }, []);
   useEffect(() => { if (data) saveData(data); }, [data]);
@@ -37,6 +38,20 @@ export default function Home() {
       return r.data;
     });
     return replaced;
+  }
+
+  // Corrección de un movimiento. Si viene merchantKey, se guarda como regla para todo ese comercio.
+  function onEdit(id, patch, merchantKey, removeRule) {
+    setData(d => {
+      if (removeRule) return removeMerchantRule(d, merchantKey);
+      if (merchantKey && (patch.kind || patch.category)) {
+        const rule = {};
+        if (patch.kind) rule.kind = patch.kind;
+        if (patch.category) rule.category = patch.category;
+        return setMerchantRule(d, merchantKey, rule);
+      }
+      return updateTransaction(d, id, patch);
+    });
   }
 
   function exportData() {
@@ -74,15 +89,15 @@ export default function Home() {
               ['movements', 'Movimientos'],
               ['docs', 'Extractos', docs.length],
             ].map(([id, label, count]) => (
-              <button key={id} className={`${s.tab} ${tab === id ? s.tabActive : ''}`} onClick={() => setTab(id)}>
+              <button key={id} className={`${s.tab} ${tab === id ? s.tabActive : ''}`} onClick={() => { setTab(id); if (id === 'movements') setQuery(''); }}>
                 {label}{count ? <span className={s.badge}>{count}</span> : null}
               </button>
             ))}
           </nav>
 
-          {tab === 'summary' && <Summary months={months} findingsTotal={moneyFindings} onGoFindings={() => setTab('findings')} />}
+          {tab === 'summary' && <Summary months={months} findingsTotal={moneyFindings} onGoFindings={() => setTab('findings')} onMerchant={name => { setQuery(name); setTab('movements'); }} />}
           {tab === 'findings' && <Findings insights={insights} txById={txById} docById={docById} />}
-          {tab === 'movements' && <Transactions transactions={transactions} docById={docById} onEdit={(id, patch) => setData(d => updateTransaction(d, id, patch))} />}
+          {tab === 'movements' && <Transactions transactions={transactions} docById={docById} rules={data.settings.rules} onEdit={onEdit} initialQuery={query} />}
           {tab === 'docs' && <Documents docs={docs} onRemove={id => setData(d => removeDocument(d, id))} onAdd={() => setAdding(true)} />}
         </>
       )}

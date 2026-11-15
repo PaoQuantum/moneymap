@@ -4,6 +4,7 @@ import { bancolombiaTarjeta } from './bancolombia-tarjeta.js';
 import { bancolombiaCuenta, nuCuenta, bbvaCredito } from './otros.js';
 import { periodLabel } from './utils.js';
 import { classify } from '../engine/classify.js';
+import { normalizeMerchant } from '../engine/merchant.js';
 
 export const PARSERS = [bbvaTarjeta, bbvaCuenta, bbvaCredito, bancolombiaTarjeta, bancolombiaCuenta, nuCuenta];
 export const SUPPORTED_BANKS = 'BBVA (cuenta, tarjeta y créditos), Bancolombia (cuenta y tarjeta) y Nu (cuenta)';
@@ -44,8 +45,11 @@ export async function processLines({ lines, pages, filename, origin, llm }) {
 
   const transactions = result.transactions.map((t, i) => {
     const c = classify(t);
+    const m = normalizeMerchant(t.description);
     return {
       ...c,
+      merchant: m.name,
+      merchantKey: m.key,
       id: hash(`${docId}|${i}|${t.date}|${t.amount}|${t.description}`),
       docId,
       // Si la fecha no se pudo leer, NO se inventa: queda vacía y marcada para revisar

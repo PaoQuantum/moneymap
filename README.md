@@ -21,7 +21,9 @@ Sube tus extractos bancarios (o tráelos directo de Gmail) y entiende en qué se
    - avances
    - seguros en la tarjeta
    - suscripciones
-7. **No cuenta dos veces.** Los pagos a la tarjeta, los movimientos entre tus cuentas y las inversiones no se suman como gasto.
+7. **Unifica comercios.** "COMPRA EN MERCAR SEDE NORTE" (BBVA) y "MERCAR SEDE SUR" (Bancolombia) quedan como **Mercar**. Así ves dónde más gastas, sin importar el banco ni la sede.
+8. **Aprende de tus correcciones.** Si cambias la categoría o el tipo de un movimiento, puedes aplicarlo a todo ese comercio. Se usa también en los extractos que importes después, y la regla se puede quitar.
+9. **No cuenta dos veces.** Los pagos a la tarjeta, los movimientos entre tus cuentas y las inversiones no se suman como gasto. Una compra a cuotas que aparece en varios extractos se muestra y se cuenta una sola vez.
 
 ## Bancos que lee hoy
 
@@ -78,6 +80,7 @@ src/lib/pdf/extract.js       Abre el PDF (con o sin clave) y lo convierte en lí
 src/lib/parsers/             Un lector por banco y producto + processLines()
 src/lib/engine/classify.js   Tipo (gasto, pago de tarjeta, transferencia…) y categoría
 src/lib/engine/insights.js   Hallazgos con evidencia y resumen mensual
+src/lib/engine/merchant.js   Nombre normalizado del comercio y reglas aprendidas
 src/lib/engine/redact.js     Anonimización y verificación anti-invento
 src/lib/gmail.js             Búsqueda y descarga de extractos desde el navegador
 src/lib/store.js             Guardado local

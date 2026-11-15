@@ -1,3 +1,6 @@
+import { normalizeMerchant, applyRule } from './engine/merchant.js';
+import { classify } from './engine/classify.js';
+
 /**
  * Tus datos viven en este navegador (localStorage). No hay servidor ni base de datos:
  * nadie más puede verlos. Puedes descargar una copia o borrarlo todo cuando quieras.
@@ -5,13 +8,13 @@
 const KEY = 'moneymap:v2';
 const PW_KEY = 'moneymap:passwords';
 
-const empty = () => ({ docs: {}, transactions: {}, processedMessages: {}, settings: { names: [] } });
+const empty = () => ({ docs: {}, transactions: {}, processedMessages: {}, settings: { names: [], rules: {} } });
 
 export function loadData() {
   if (typeof window === 'undefined') return empty();
   try {
     const raw = window.localStorage.getItem(KEY);
-    return raw ? { ...empty(), ...JSON.parse(raw) } : empty();
+    return raw ? migrate({ ...empty(), ...JSON.parse(raw) }) : empty();
   } catch {
     return empty();
   }
@@ -26,13 +29,24 @@ export function saveData(data) {
   }
 }
 
+// Datos guardados con una versión anterior: se les agrega el comercio normalizado
+function migrate(data) {
+  data.settings = { names: [], rules: {}, ...data.settings };
+  data.settings.rules = data.settings.rules || {};
+  for (const t of Object.values(data.transactions)) {
+    if (!t.merchantKey) { const m = normalizeMerchant(t.description); t.merchant = m.name; t.merchantKey = m.key; }
+  }
+  return data;
+}
+
 // Agrega un documento procesado. Si el mismo extracto ya estaba, lo reemplaza (no se duplica).
 export function addDocument(data, { doc, transactions }) {
   const next = { ...data, docs: { ...data.docs }, transactions: { ...data.transactions } };
   const replaced = !!next.docs[doc.id];
   for (const [id, t] of Object.entries(next.transactions)) if (t.docId === doc.id) delete next.transactions[id];
   next.docs[doc.id] = doc;
-  for (const t of transactions) next.transactions[t.id] = { ...t, docAccount: doc.accountLast4 };
+  const rules = data.settings?.rules || {};
+  for (const t of transactions) next.transactions[t.id] = applyRule({ ...t, docAccount: doc.accountLast4 }, rules);
   return { data: next, replaced };
 }
 
@@ -47,6 +61,33 @@ export function updateTransaction(data, id, patch) {
   const t = data.transactions[id];
   if (!t) return data;
   return { ...data, transactions: { ...data.transactions, [id]: { ...t, ...patch, editedByUser: true } } };
+}
+
+/**
+ * La persona corrigió un movimiento y pidió aplicarlo a todo el comercio:
+ * se guarda la regla y se aplica a lo que ya está (y a lo que llegue después, en addDocument).
+ */
+export function setMerchantRule(data, merchantKey, rule) {
+  const rules = { ...data.settings.rules, [merchantKey]: { ...data.settings.rules?.[merchantKey], ...rule } };
+  const transactions = { ...data.transactions };
+  for (const [id, t] of Object.entries(transactions)) {
+    if (t.merchantKey === merchantKey) transactions[id] = applyRule({ ...t, editedByUser: false }, rules);
+  }
+  return { ...data, transactions, settings: { ...data.settings, rules } };
+}
+
+export function removeMerchantRule(data, merchantKey) {
+  const rules = { ...data.settings.rules };
+  delete rules[merchantKey];
+  // Los movimientos vuelven a la clasificación automática
+  const transactions = { ...data.transactions };
+  for (const [id, t] of Object.entries(transactions)) {
+    if (t.merchantKey === merchantKey && t.ruleApplied) {
+      const { kind, category } = classify(t);
+      transactions[id] = { ...t, kind, category, ruleApplied: false };
+    }
+  }
+  return { ...data, transactions, settings: { ...data.settings, rules } };
 }
 
 // Claves de los PDF: por defecto solo duran mientras la pestaña está abierta
