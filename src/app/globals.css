@@ -1,169 +1,38 @@
 :root {
-  /* Apple Light Liquid Glass / Modern FinTech style */
-  --bg-color: #f0f4fa; /* Very subtle blue-ish grey background */
-  --bg-gradient: radial-gradient(circle at top right, rgba(235, 240, 255, 0.4) 0%, transparent 70%);
-  
-  --glass-bg: #ffffff; /* Opaque white for cards */
-  --glass-border: rgba(255, 255, 255, 1);
-  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.03);
-  --glass-radius: 20px;
-
-  --text-primary: #1e293b; /* Slate 800 */
-  --text-secondary: #64748b; /* Slate 500 */
-  --text-tertiary: #94a3b8; /* Slate 400 */
-  
-  /* Brand accents */
-  --accent-base: #0ebc7f; /* Main green */
-  --accent-light: #e6f8f1;
-  --accent-text: #ffffff;
-  
-  --warn-color: #f97316; /* Orange */
-  --warn-light: #fff7ed;
-  
-  --info-color: #3b82f6; /* Blue */
-  --info-light: #eff6ff;
-
-  --neutral-bg: #f1f5f9; /* Grey background for inactive elements/bars */
+  --bg: #f3f6fa;
+  --card: #ffffff;
+  --line: #e4e9f0;
+  --text: #1e293b;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --accent: #0ebc7f;
+  --accent-dark: #08905f;
+  --accent-soft: #e6f8f1;
+  --save: #3b82f6;
+  --save-soft: #eff6ff;
+  --warn: #ea7a17;
+  --warn-soft: #fff4e8;
+  --danger: #dc2626;
+  --danger-soft: #fdecec;
+  --radius: 16px;
+  --shadow: 0 6px 24px rgba(15, 23, 42, 0.05);
 }
 
-html,
-body {
-  max-width: 100vw;
-  min-height: 100vh;
-  overflow-x: hidden;
-  background-color: var(--bg-color);
-  background-image: var(--bg-gradient);
-  background-attachment: fixed;
-}
+* { box-sizing: border-box; }
 
-body {
-  color: var(--text-primary);
-  font-family: var(--font-outfit), system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  padding: 0;
+html, body {
   margin: 0;
-  box-sizing: border-box;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-* {
-  box-sizing: inherit;
-}
+button { font: inherit; cursor: pointer; }
+input, select { font: inherit; }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Base Card Utilities (Liquid Glass) */
-.glass-panel {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--glass-radius);
-  box-shadow: var(--glass-shadow);
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-}
-
-/* Utilities */
-.flex-between {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.flex-col {
-  display: flex;
-  flex-direction: column;
-}
-
-.gap-1 { gap: 0.5rem; }
-.gap-2 { gap: 1rem; }
-.gap-3 { gap: 1.5rem; }
-.gap-4 { gap: 2rem; }
-
-/* Buttons */
-.btn {
-  background: var(--neutral-bg);
-  color: var(--text-primary);
-  font-weight: 600;
-  font-size: 0.9rem;
-  padding: 0.75rem 1.25rem;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  transition: all 0.2s;
-}
-
-.btn:hover:not(:disabled) {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: var(--accent-base);
-  color: var(--accent-text);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #0cad73;
-}
-
-/* Badges */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.25rem 0.5rem;
-  border-radius: 100px;
-  background: var(--accent-light);
-  color: var(--accent-base);
-}
-
-.badge-warning {
-  background: var(--warn-light);
-  color: var(--warn-color);
-}
-
-/* Progress bar */
-.progress-container {
-  width: 100%;
-  height: 8px;
-  background: var(--neutral-bg);
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-}
-
-.progress-bar {
-  height: 100%;
-  background: var(--text-secondary);
-  border-radius: 10px;
-  position: relative;
-}
-
-/* Shimmer animation */
-.progress-bar::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; bottom: 0; right: 0;
-  background: linear-gradient(
-    90deg, 
-    transparent, 
-    rgba(255,255,255,0.2), 
-    transparent
-  );
-  transform: translateX(-100%);
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
 }
