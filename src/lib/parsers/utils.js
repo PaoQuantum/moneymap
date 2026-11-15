@@ -35,7 +35,8 @@ export function monthFromName(name) {
 // Algunos PDFs (Bancolombia) repiten el mismo texto tres veces por el efecto de "negrilla".
 export function collapseRepeats(text) {
   let out = text;
-  for (let i = 0; i < 3; i++) out = out.replace(/(.{2,}?)\1\1/g, '$1');
+  // Nunca se colapsan números ("000000", "111.111"): solo texto repetido
+  for (let i = 0; i < 3; i++) out = out.replace(/(.{2,}?)\1\1/g, (m, unit) => (/^[\d\s.,$-]+$/.test(unit) ? m : unit));
   return out;
 }
 

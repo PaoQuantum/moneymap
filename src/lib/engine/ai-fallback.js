@@ -1,8 +1,10 @@
-import { redactLines, verifyAgainstLine } from './redact.js';
+import { redactLines } from './redact.js';
+import { judgeExtraction } from './judge.js';
 
 /**
- * Crea la función de respaldo con IA que usa processLines cuando no hay lector para un banco.
- * Solo manda texto anonimizado y solo acepta movimientos que se puedan comprobar en el PDF.
+ * Lector universal con IA. Se usa cuando no hay lector propio para un banco
+ * o cuando el lector propio no logra cuadrar los totales.
+ * Solo manda texto anonimizado, y el resultado pasa por el "juez" (judge.js).
  */
 export function makeAiFallback({ names = [] } = {}) {
   return async function aiFallback(lines) {
@@ -17,38 +19,18 @@ export function makeAiFallback({ names = [] } = {}) {
       throw e;
     }
     if (!res.ok) throw new Error('La IA no pudo leer este extracto.');
-    const json = await res.json();
-    const accepted = [];
-    let rejected = 0;
-    for (const t of json.transactions || []) {
-      const line = lines[t.line];
-      if (verifyAgainstLine(t, line)) {
-        accepted.push({
-          date: /^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? t.date : null,
-          description: String(t.description || '').slice(0, 120),
-          amount: Number(t.amount),
-          currency: t.currency === 'USD' ? 'USD' : 'COP',
-          page: line.page,
-          line: line.text,
-          needsReview: true,
-          reviewReason: 'Leído con IA: comprueba que esté bien.',
-        });
-      } else {
-        rejected++;
-      }
-    }
+    const ai = await res.json();
+    const judged = judgeExtraction(ai, lines);
+    const last4 = String(ai.accountLast4 || '').replace(/\D/g, '').slice(-4) || null;
     return {
-      bank: json.bank,
-      product: json.product,
-      periodStart: json.periodStart || null,
-      periodEnd: json.periodEnd || null,
-      transactions: accepted,
-      check: {
-        ok: rejected === 0 && accepted.length > 0,
-        label: rejected
-          ? `Leído con IA. Descarté ${rejected} movimiento(s) que no pude encontrar escritos en el PDF.`
-          : 'Leído con IA. Cada movimiento se comprobó contra la línea del PDF de donde salió.',
-      },
+      bank: ai.bank,
+      product: ai.product,
+      accountLast4: last4,
+      periodStart: /^\d{4}-\d{2}-\d{2}$/.test(ai.periodStart || '') ? ai.periodStart : null,
+      periodEnd: /^\d{4}-\d{2}-\d{2}$/.test(ai.periodEnd || '') ? ai.periodEnd : null,
+      dueDate: /^\d{4}-\d{2}-\d{2}$/.test(ai.dueDate || '') ? ai.dueDate : null,
+      transactions: judged.transactions,
+      check: judged.check,
     };
   };
 }

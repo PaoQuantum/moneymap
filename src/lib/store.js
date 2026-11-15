@@ -8,7 +8,7 @@ import { classify } from './engine/classify.js';
 const KEY = 'moneymap:v2';
 const PW_KEY = 'moneymap:passwords';
 
-const empty = () => ({ docs: {}, transactions: {}, processedMessages: {}, settings: { names: [], rules: {} } });
+const empty = () => ({ docs: {}, transactions: {}, processedMessages: {}, claims: {}, settings: { names: [], rules: {} } });
 
 export function loadData() {
   if (typeof window === 'undefined') return empty();
@@ -33,10 +33,17 @@ export function saveData(data) {
 function migrate(data) {
   data.settings = { names: [], rules: {}, ...data.settings };
   data.settings.rules = data.settings.rules || {};
+  data.claims = data.claims || {};
   for (const t of Object.values(data.transactions)) {
     if (!t.merchantKey) { const m = normalizeMerchant(t.description); t.merchant = m.name; t.merchantKey = m.key; }
   }
   return data;
+}
+
+// Restaurar una copia de seguridad
+export function restoreData(raw) {
+  if (!raw || typeof raw !== 'object' || !raw.docs || !raw.transactions) throw new Error('La copia está incompleta.');
+  return migrate({ ...empty(), ...raw });
 }
 
 // Agrega un documento procesado. Si el mismo extracto ya estaba, lo reemplaza (no se duplica).
@@ -88,6 +95,12 @@ export function removeMerchantRule(data, merchantKey) {
     }
   }
   return { ...data, transactions, settings: { ...data.settings, rules } };
+}
+
+// Seguimiento de reclamos: { status: todo|sent|won|lost, radicado, recovered, updatedAt }
+export function setClaim(data, findingId, patch) {
+  const prev = data.claims?.[findingId] || { status: 'todo' };
+  return { ...data, claims: { ...data.claims, [findingId]: { ...prev, ...patch, updatedAt: new Date().toISOString() } } };
 }
 
 // Claves de los PDF: por defecto solo duran mientras la pestaña está abierta

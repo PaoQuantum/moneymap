@@ -17,21 +17,36 @@ export async function POST(req) {
   }
 
   const text = lines.slice(0, 1500).map(l => `[${l.i}] ${l.text}`).join('\n');
-  const system = `Lees extractos bancarios de Colombia. Cada línea empieza con su número entre corchetes.
+  const system = `Lees extractos bancarios de Colombia (cualquier banco: cuentas, tarjetas de crédito, créditos).
+Cada línea empieza con su número entre corchetes. Los datos personales vienen tapados.
 Devuelve SOLO un JSON con esta forma:
-{"bank": "nombre del banco", "product": "Cuenta de ahorros | Tarjeta de crédito | Crédito", "periodStart": "YYYY-MM-DD o null", "periodEnd": "YYYY-MM-DD o null",
- "transactions": [{"line": número de línea, "date": "YYYY-MM-DD o null", "description": "texto", "amount": número, "currency": "COP o USD"}]}
+{
+ "bank": "nombre del banco",
+ "product": "Cuenta de ahorros | Cuenta corriente | Tarjeta de crédito | Crédito",
+ "accountLast4": "últimos 4 dígitos visibles del producto o null",
+ "periodStart": "YYYY-MM-DD o null", "periodEnd": "YYYY-MM-DD o null", "dueDate": "YYYY-MM-DD o null",
+ "totals": {
+   "openingBalance": {"value": número, "line": número} o null,
+   "closingBalance": {"value": número, "line": número} o null,
+   "totalCharges":   {"value": número, "line": número} o null,
+   "totalCredits":   {"value": número, "line": número} o null
+ },
+ "transactions": [{"line": número, "date": "YYYY-MM-DD o null", "description": "texto", "amount": número, "currency": "COP o USD",
+                   "installments": {"current": número, "total": número} o null}]
+}
 Reglas:
 - amount negativo = plata que sale o cargo en la tarjeta; positivo = plata que entra, pago o abono a la tarjeta.
-- Copia la descripción tal como aparece. No inventes movimientos ni fechas: si no ves la fecha, usa null.
-- Solo incluye movimientos que estén escritos en una línea concreta, y cita esa línea.`;
+- totalCharges y totalCredits son los totales que imprime el banco (por ejemplo "Total compras del mes", "Total débitos", "Total créditos"). No los calcules tú: si no están escritos, usa null.
+- Cita siempre la línea exacta de cada movimiento y de cada total.
+- Copia la descripción tal como aparece. No inventes movimientos, fechas ni totales: si no los ves, usa null.
+- No incluyas el saldo ni los totales como movimientos.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5',
-      max_tokens: 8000,
+      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
+      max_tokens: 16000,
       system,
       messages: [{ role: 'user', content: text }],
     }),

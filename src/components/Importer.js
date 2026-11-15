@@ -1,10 +1,11 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import s from '../app/app.module.css';
 import { importPdf } from '../lib/import.js';
 import { connectGmail, findStatementEmails, downloadAttachment, gmailConfigured } from '../lib/gmail.js';
 import { getPasswords, setPasswords, isRemembered } from '../lib/store.js';
 import { SUPPORTED_BANKS } from '../lib/parsers/index.js';
+import { inboxAddressBase, inboxAddress, newInboxToken, listInbox, downloadInboxItem, deleteInboxItem } from '../lib/inbox.js';
 
 const ICONS = {
   waiting: ['…', '#f1f5f9', '#64748b'],
@@ -21,7 +22,7 @@ const ICONS = {
  * Agrega extractos de dos formas: conectando Gmail o subiendo PDFs.
  * Muestra el avance de cada archivo y pide la clave solo cuando hace falta.
  */
-export default function Importer({ data, onImported, compact, onDone }) {
+export default function Importer({ data, onImported, compact, onDone, onSettings, autoInbox }) {
   const [queue, setQueue] = useState([]);
   const [pw, setPw] = useState(() => getPasswords()[0] || '');
   const [remember, setRemember] = useState(() => isRemembered());
@@ -30,7 +31,11 @@ export default function Importer({ data, onImported, compact, onDone }) {
   const [months, setMonths] = useState(3);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [notes, setNotes] = useState([]); // correos sin PDF que llegaron al buzón (p. ej. código de Gmail)
+  const [copiedAddr, setCopiedAddr] = useState(false);
   const fileRef = useRef();
+  const token = data.settings?.inboxToken;
+  const address = inboxAddress(token);
   const pending = useRef({});
 
   const update = (id, patch) => setQueue(q => q.map(it => (it.id === id ? { ...it, ...patch } : it)));
@@ -56,6 +61,7 @@ export default function Importer({ data, onImported, compact, onDone }) {
         const replaced = onImported(res);
         if (res.passwordUsed) passwordsNow(res.passwordUsed);
         delete pending.current[item.id];
+        item.onFinish?.();
         update(item.id, {
           status: replaced ? 'duplicate' : 'done',
           title: res.doc.name,
@@ -65,6 +71,7 @@ export default function Importer({ data, onImported, compact, onDone }) {
         update(item.id, { status: 'needs_password', note: res.wrong ? 'La clave no funcionó. Escribe la clave de este extracto.' : 'Este extracto tiene clave. Normalmente es tu número de cédula.' });
       } else {
         delete pending.current[item.id];
+        if (res.status === 'unsupported') item.onFinish?.();
         update(item.id, { status: res.status, note: res.message });
       }
     } catch (e) {
@@ -122,6 +129,37 @@ export default function Importer({ data, onImported, compact, onDone }) {
     }
   }
 
+  async function fromInbox() {
+    if (!token) return;
+    setBusy(true); setMsg('Revisando tu buzón…');
+    try {
+      const items = await listInbox(token);
+      if (items === null) { setMsg('El buzón no está activado en esta instalación.'); return; }
+      const pdfs = items.filter(i => i.kind === 'pdf');
+      setNotes(items.filter(i => i.kind === 'message'));
+      setMsg(pdfs.length ? `Llegaron ${pdfs.length} extracto(s) a tu buzón.` : 'Tu buzón está vacío. Cuando el banco te mande un extracto y se reenvíe, aparece aquí.');
+      const queued = pdfs.map(i => ({
+        id: `inbox-${i.id}`,
+        name: i.filename,
+        origin: { type: 'inbox', account: address, messageId: i.messageId || i.id, subject: i.subject, from: i.from, date: i.date },
+        getBytes: () => downloadInboxItem(token, i.id),
+        onFinish: () => deleteInboxItem(token, i.id),
+        status: data.processedMessages?.[`${i.messageId || i.id}:${i.filename}`] ? 'skipped' : 'waiting',
+        note: `${i.from} · ${new Date(i.date).toLocaleDateString('es-CO')}`,
+      }));
+      // Lo que ya estaba importado se borra del buzón sin volver a procesarlo
+      for (const q of queued.filter(q => q.status === 'skipped')) q.onFinish();
+      setQueue(q => [...queued, ...q]);
+      for (const it of queued.filter(q => q.status !== 'skipped')) await runItem(it);
+    } catch (e) {
+      setMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => { if (autoInbox && token) fromInbox(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div>
       {!compact && (
@@ -164,8 +202,44 @@ export default function Importer({ data, onImported, compact, onDone }) {
               </div>
               <p className={s.small} style={{ margin: '0 0 12px' }}>Solo lectura: busco correos con extractos en PDF. No leo ni guardo el resto de tus correos.</p>
             </>
-          ) : (
-            <p className={s.privacy} style={{ marginBottom: 12 }}>La conexión con Gmail no está activada en esta instalación. Mira el README para activarla.</p>
+          ) : !inboxAddressBase() ? (
+            <p className={s.privacy} style={{ marginBottom: 12 }}>Traer extractos del correo no está activado en esta instalación (mira el README). Mientras tanto, súbelos en PDF.</p>
+          ) : null}
+
+          {inboxAddressBase() && (
+            <div className={s.inbox}>
+              <p className={s.cardTitle} style={{ fontSize: 15, margin: 0 }}>📮 Recíbelos solos cada mes</p>
+              {!token ? (
+                <>
+                  <p className={s.small} style={{ margin: '4px 0 8px' }}>Te damos una dirección personal. Pones un filtro en tu correo para reenviarle los correos del banco, y tus extractos llegan aquí solos.</p>
+                  <button className={s.btn} onClick={() => onSettings?.({ inboxToken: newInboxToken() })}>Crear mi dirección</button>
+                </>
+              ) : (
+                <>
+                  <div className={s.addrRow}>
+                    <code className={s.addr}>{address}</code>
+                    <button className={s.btn} onClick={() => { navigator.clipboard?.writeText(address); setCopiedAddr(true); }}>{copiedAddr ? 'Copiada ✓' : 'Copiar'}</button>
+                  </div>
+                  <details className={s.small}>
+                    <summary>Cómo activar el reenvío en Gmail (2 minutos)</summary>
+                    <ol style={{ margin: '6px 0', paddingLeft: 18, lineHeight: 1.6 }}>
+                      <li>En Gmail: Configuración → <em>Reenvío y correo POP/IMAP</em> → <em>Añadir una dirección de reenvío</em> y pega tu dirección.</li>
+                      <li>Gmail manda un código de confirmación a esa dirección: aparece aquí abajo al tocar «Revisar mi buzón».</li>
+                      <li>Crea un filtro: <code>from:(bbva OR bancolombia OR davivienda OR nu) has:attachment filename:pdf</code> → <em>Reenviar a</em> tu dirección.</li>
+                    </ol>
+                    Solo llegan los correos que pase tu filtro. Los PDF siguen protegidos con tu clave: el servidor no los abre y se borran apenas los importas (o a los 30 días).
+                  </details>
+                  <button className={`${s.btn} ${s.btnPrimary}`} style={{ marginTop: 8 }} onClick={fromInbox} disabled={busy}>Revisar mi buzón</button>
+                  {notes.map(n => (
+                    <div key={n.id} className={s.fAction} style={{ marginTop: 8 }}>
+                      ✉️ <strong>{n.subject || 'Mensaje sin asunto'}</strong> · {n.from}
+                      {n.text && <div className={s.small} style={{ marginTop: 4 }}>{n.text}</div>}
+                      <button className={`${s.btn} ${s.btnGhost}`} style={{ padding: '2px 6px', marginTop: 4 }} onClick={() => { deleteInboxItem(token, n.id); setNotes(x => x.filter(y => y.id !== n.id)); }}>Borrar</button>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
           )}
 
           <div

@@ -144,3 +144,25 @@
 
 /* Recuadro de corrección en el detalle del movimiento */
 .fixBox { margin-top: 16px; padding: 16px; border: 1px solid var(--line, #e7ecf2); border-radius: 14px; }
+
+/* Inicio: plata por recuperar y estado de los reclamos */
+.homeHero {
+  display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;
+  background: linear-gradient(135deg, #0ebc7f14, #0ebc7f05); border: 1px solid #0ebc7f40;
+  border-radius: 20px; padding: 24px; margin-bottom: 20px;
+}
+.homeBig { font-size: clamp(34px, 7vw, 52px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin: 4px 0; }
+.homeStats { display: flex; gap: 28px; text-align: center; }
+.claimBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 4px; }
+.fDone { opacity: .65; }
+.steps2 { margin: 16px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.6; color: var(--muted, #5b6b7f); }
+@media (max-width: 640px) { .homeStats { width: 100%; justify-content: space-between; gap: 8px; } }
+
+/* Buzón de reenvío */
+.inbox { border: 1px dashed var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.addrRow { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.addr { flex: 1; min-width: 0; overflow-wrap: anywhere; background: #f4f7fa; border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+.inboxBanner {
+  width: 100%; text-align: left; margin-bottom: 16px; padding: 14px 16px; border-radius: 14px;
+  border: 1px solid #0ebc7f60; background: #0ebc7f12; color: inherit; font-weight: 500;
+}

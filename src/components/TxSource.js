@@ -16,6 +16,7 @@ export default function TxSource({ tx, doc, showAmount }) {
       <div className={s.small}>
         📄 <strong>{doc?.name || 'Extracto'}</strong> · página {tx.page}
         {origin?.type === 'gmail' && <> · llegó a {origin.account} el {new Date(origin.date).toLocaleDateString('es-CO')}{origin.subject ? ` («${origin.subject}»)` : ''}</>}
+        {origin?.type === 'inbox' && <> · reenviado por {origin.from} el {new Date(origin.date).toLocaleDateString('es-CO')}{origin.subject ? ` («${origin.subject}»)` : ''}</>}
         {origin?.type === 'upload' && <> · archivo {doc.filename}</>}
       </div>
       <div className={s.sourceLine}>{tx.line}</div>

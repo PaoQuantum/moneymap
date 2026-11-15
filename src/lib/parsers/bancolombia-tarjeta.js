@@ -31,7 +31,12 @@ export const bancolombiaTarjeta = {
     }
 
     // Totales del resumen en pesos, para comprobar que no faltó ningún movimiento
-    const firstSummary = all.split(/Moneda:\s*DOLARES/i)[0];
+    // La sección en pesos puede venir antes o después de la de dólares
+    const sections = all.split(/(?=(?:ESTADO DE CUENTA EN|Moneda):\s*(?:PESOS|DOLARES))/i);
+    const isUsd = x => /^(?:ESTADO DE CUENTA EN|Moneda):\s*DOLARES/i.test(x);
+    const hasTotal = x => /Compras del mes/i.test(x);
+    const firstSummary = sections.find(x => /^(?:ESTADO DE CUENTA EN|Moneda):\s*PESOS/i.test(x) && hasTotal(x))
+      || sections.find(x => !isUsd(x) && hasTotal(x)) || '';
     const summaryPurchases = firstSummary.match(/Compras del mes\s+\$\s*([\d.,]+)/);
     const summaryLateFee = firstSummary.match(/Intereses de mora\s+\$\s*([\d.,]+)/);
     const summaryOther = firstSummary.match(/Otros cargos\s+\$\s*([\d.,]+)/);

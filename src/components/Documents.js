@@ -29,9 +29,9 @@ export default function Documents({ docs, onRemove, onAdd }) {
                 </div>
                 <div className={`${s.small} ${d.check?.ok ? s.ok : s.warnText}`} style={{ marginTop: 4 }}>{d.check?.label}</div>
                 <div className={s.small} style={{ marginTop: 4 }}>
-                  {d.origin?.type === 'gmail'
-                    ? <>Llegó a {d.origin.account} · {d.origin.from} · {new Date(d.origin.date).toLocaleDateString('es-CO')}</>
-                    : <>Subido a mano · {d.filename}</>}
+                  {d.origin?.type === 'gmail' && <>Llegó a {d.origin.account} · {d.origin.from} · {new Date(d.origin.date).toLocaleDateString('es-CO')}</>}
+                  {d.origin?.type === 'inbox' && <>Llegó a tu buzón · {d.origin.from} · {new Date(d.origin.date).toLocaleDateString('es-CO')}</>}
+                  {(!d.origin || d.origin.type === 'upload') && <>Subido a mano · {d.filename}</>}
                   {d.method === 'ai' ? ' · leído con IA' : ''}
                 </div>
               </div>
