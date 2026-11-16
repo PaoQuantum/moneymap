@@ -32,6 +32,7 @@
 | BBVA | Créditos (hipotecario, consumo) | Reconoce el crédito y la cuota en que vas |
 | Bancolombia | Tarjeta de crédito | Pesos y dólares; suma de compras = "Compras del mes" |
 | Bancolombia | Cuenta de ahorros | Movimientos |
+| Banco de Occidente | Cuenta de ahorros o corriente | Saldo anterior + créditos − débitos = saldo actual |
 | Nu | Cuenta | Meses sin movimientos |
 
 Cualquier otro banco se lee con el lector universal con IA (si está activado) y pasa por el juez.
