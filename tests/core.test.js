@@ -90,3 +90,9 @@ test('anti-alucinación: el monto debe aparecer en la línea citada', () => {
   assert.ok(verifyAgainstLine({ amount: -45900 }, { text: 'COMPRA TIENDA DEMO 45.900,00' }));
   assert.equal(verifyAgainstLine({ amount: -99999 }, { text: 'COMPRA TIENDA DEMO 45.900,00' }), false);
 });
+
+test('intereses que entran a una cuenta son rendimientos; el GMF es un impuesto', () => {
+  assert.equal(classify({ description: 'INTERESES LIQUIDADOS', amount: 0.01 }).category, 'Rendimientos');
+  assert.equal(classify({ description: 'INTERESES LIQUIDADOS', amount: 0.01 }).kind, 'income');
+  assert.equal(classify({ description: 'GMF', amount: -104.72 }).category, 'Impuestos');
+});

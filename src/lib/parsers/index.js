@@ -2,12 +2,13 @@ import { bbvaCuenta } from './bbva-cuenta.js';
 import { bbvaTarjeta } from './bbva-tarjeta.js';
 import { bancolombiaTarjeta } from './bancolombia-tarjeta.js';
 import { bancolombiaCuenta, nuCuenta, bbvaCredito } from './otros.js';
+import { occidenteCuenta } from './occidente.js';
 import { periodLabel } from './utils.js';
 import { classify } from '../engine/classify.js';
 import { normalizeMerchant } from '../engine/merchant.js';
 
-export const PARSERS = [bbvaTarjeta, bbvaCuenta, bbvaCredito, bancolombiaTarjeta, bancolombiaCuenta, nuCuenta];
-export const SUPPORTED_BANKS = 'BBVA (cuenta, tarjeta y créditos), Bancolombia (cuenta y tarjeta) y Nu (cuenta)';
+export const PARSERS = [bbvaTarjeta, bbvaCuenta, bbvaCredito, bancolombiaTarjeta, bancolombiaCuenta, occidenteCuenta, nuCuenta];
+export const SUPPORTED_BANKS = 'BBVA (cuenta, tarjeta y créditos), Bancolombia (cuenta y tarjeta), Banco de Occidente (cuenta) y Nu (cuenta)';
 
 function hash(str) {
   let h = 5381;
@@ -29,10 +30,11 @@ export async function processLines({ lines, pages, filename, origin, llm }) {
     parserId = parser.id; bank = parser.bank; product = result.product || parser.product; method = 'reader';
     // Si el lector propio no cuadra los totales (por ejemplo, el banco cambió el formato),
     // se intenta con la IA y gana la lectura que sí cuadre.
-    if (result.check && !result.check.ok && result.transactions.length && llm) {
+    if (result.check && !result.check.ok && !result.unsupportedMovements && llm) {
       try {
         const ai = await llm(lines);
-        if (ai.check?.ok) {
+        // También gana la IA si el lector propio no encontró nada y ella sí
+        if (ai.isStatement !== false && (ai.check?.ok || (!result.transactions.length && ai.transactions.length))) {
           result = { ...result, ...ai, accountLast4: result.accountLast4 || ai.accountLast4 };
           method = 'ai';
         }
@@ -46,6 +48,13 @@ export async function processLines({ lines, pages, filename, origin, llm }) {
         return { ok: false, reason: 'unsupported', message: `Todavía no sé leer este tipo de extracto y la lectura con IA no está activada. Por ahora leo ${SUPPORTED_BANKS}.` };
       }
       throw e;
+    }
+    // La IA leyó el PDF pero no es un extracto, o no hay nada que se pueda comprobar: no se guarda nada
+    if (result.isStatement === false) {
+      return { ok: false, reason: 'not_statement', message: 'Este PDF no parece un extracto bancario. Sube el extracto o estado de cuenta que te manda el banco.' };
+    }
+    if (result.empty) {
+      return { ok: false, reason: 'unreadable', message: 'Abrí el PDF, pero no pude leer movimientos que se puedan comprobar. No guardé nada para no mostrarte datos dudosos. Intenta de nuevo o avísanos de qué banco es.' };
     }
     parserId = 'ia'; bank = result.bank || 'Banco sin identificar'; product = result.product || 'Extracto'; method = 'ai';
   } else {

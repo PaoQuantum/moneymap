@@ -27,7 +27,13 @@ function itemsToLines(items) {
     const x = it.transform[4];
     const y = it.transform[5];
     const h = Math.abs(it.transform[3]) || it.height || 8;
-    let row = rows.find(r => Math.abs(r.y - y) <= Math.max(2, h * 0.45));
+    // Texto girado (por ejemplo, el nombre del banco en el margen): va en su propia línea
+    // para que no se mezcle con las filas de movimientos.
+    if (Math.abs(it.transform[1]) > Math.abs(it.transform[0])) {
+      rows.push({ y, h, rotated: true, items: [{ x, w: 0, str: it.str, h }] });
+      continue;
+    }
+    let row = rows.find(r => !r.rotated && Math.abs(r.y - y) <= Math.max(2, h * 0.45));
     if (!row) { row = { y, h, items: [] }; rows.push(row); }
     row.items.push({ x, w: it.width || 0, str: it.str, h });
   }

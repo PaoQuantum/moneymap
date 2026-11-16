@@ -72,3 +72,30 @@ test('banco desconocido sin IA: lo dice claramente', async () => {
   assert.equal(r.ok, false);
   assert.match(r.message, /IA no está activada/);
 });
+
+test('un PDF que no es extracto no se guarda y lo dice claro', async () => {
+  const llm = async () => ({ isStatement: false, empty: true, transactions: [], check: { ok: false, label: '' } });
+  const r = await processLines({ lines, pages: 1, filename: 'receta.pdf', llm });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'not_statement');
+});
+
+test('si la IA no logra leer nada comprobable, no se guarda un extracto vacío', async () => {
+  const llm = async () => ({ isStatement: true, empty: true, transactions: [], check: { ok: false, label: '' } });
+  const r = await processLines({ lines, pages: 1, filename: 'x.pdf', llm });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'unreadable');
+});
+
+test('extracto sin movimientos (saldo inicial = final) sí es válido', () => {
+  const ls = ['BANCO EJEMPLO', 'SALDO ANTERIOR 500.000,00', 'SALDO FINAL 500.000,00'].map(text => ({ page: 1, text }));
+  const r = judgeExtraction({ transactions: [], totals: { openingBalance: { value: 500000, line: 1 }, closingBalance: { value: 500000, line: 2 } } }, ls);
+  assert.equal(r.emptyMonth, true);
+  assert.equal(r.check.ok, true);
+});
+
+test('formato nuevo de cuotas (installmentTotal) se conserva', () => {
+  const ai = { ...goodAi, transactions: [{ ...goodAi.transactions[0], installmentCurrent: 1, installmentTotal: 12 }, ...goodAi.transactions.slice(1)] };
+  const r = judgeExtraction(ai, lines);
+  assert.deepEqual(r.transactions[0].installments, { current: 1, total: 12 });
+});

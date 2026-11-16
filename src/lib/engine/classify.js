@@ -64,6 +64,8 @@ export function classify(tx) {
   if (kind === 'cash_advance' && tx.amount > 0) label = 'Avance que llegó de tu tarjeta';
   // El cargo pequeño a 1 cuota que acompaña un avance es la comisión del avance
   if (kind === 'cash_advance' && tx.amount < 0 && tx.installments?.total === 1) { kind = 'fee'; label = 'Comisión por avance'; }
+  // Intereses que el banco te PAGA en una cuenta (plata que entra) son rendimientos, no un cobro
+  if (tx.amount > 0 && !tx.card && /INTERESES?\s+(LIQUIDADOS|GANADOS|PAGADOS|ABONADOS)|RENDIMIENTOS?/i.test(d)) { kind = 'income'; label = 'Rendimientos'; }
   // En la tarjeta, una devolución o pago tiene signo positivo; si no hay regla, decide el signo
   if (!kind) {
     if (tx.amount > 0) { kind = /ABONO|RECIBISTE|TRANSFERENCIA DE/i.test(d) ? 'income' : 'refund'; label = kind === 'income' ? 'Otros ingresos' : 'Abono'; }
